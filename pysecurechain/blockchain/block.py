@@ -1,11 +1,26 @@
 import hashlib
 import time
+from abc import ABC, abstractmethod
 from typing import Optional, Any
 
-from pysecurechain.exceptions import BlockAttributeTypeError, BlockAttributeKeyError
+from pysecurechain.exceptions import (
+    BlockchainAttributeTypeError,
+    BlockchainAttributeKeyError,
+)
 
 
-class Block:
+class BlockInterface(ABC):
+    @classmethod
+    @abstractmethod
+    def _Block__validate_attrs(cls, key: str, value: Any) -> None:
+        pass
+
+    @abstractmethod
+    def _Block__calculate_hash(self) -> str:
+        pass
+
+
+class Block(BlockInterface):
     """Block, a single component unit of the blockchain."""
 
     __attrs = {
@@ -26,21 +41,26 @@ class Block:
     def __calculate_hash(self) -> str:
         """Calculating the hash function for self block of the blockchain."""
 
-        sha = hashlib.sha256()
-        sha.update(
-            "".join([str(value) for value in self.__dict__.values()]).encode("utf-8")
+        key = hashlib.pbkdf2_hmac(
+            "sha512",
+            "".join(
+                [str(value) for value in self.__dict__.values() if value is not None]
+            ).encode("utf-8"),
+            "pysecurechain".encode("utf-8"),
+            1000000,
+            dklen=256,
         )
-        return sha.hexdigest()
+        return str(key)
 
     def __setattr__(self, key, value):
         if key in self.__attrs:
             try:
                 self.__validate_attrs(key, value)
             except TypeError:
-                raise BlockAttributeTypeError
+                raise BlockchainAttributeTypeError
             else:
                 return object.__setattr__(self, key, value)
-        raise BlockAttributeKeyError
+        raise BlockchainAttributeKeyError
 
     def __init__(
         self,
@@ -49,13 +69,16 @@ class Block:
         previous_hash: str,
         data: Optional[list] = None,
         timestamp: Optional[float] = None,
+        actual_hash: Optional[str] = None,
     ):
         self.index = index
         self.segment_id = segment_id
         self.previous_hash = previous_hash
         self.data = [] if data is None else data
         self.timestamp = time.time() if timestamp is None else timestamp
-        self.actual_hash = self.__calculate_hash()
+        self.actual_hash = (
+            self.__calculate_hash() if actual_hash is None else actual_hash
+        )
 
     def __str__(self):
         return self.__repr__()
